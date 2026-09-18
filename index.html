@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宠物住院喂药排班台</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#2b3445; --muted:#8a94a6;
+    --line:#e6eaf2; --brand:#4a6cf7;
+    --emergency:#e5484d; --high:#e8871a; --normal:#2f80ed;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  header{
+    background:linear-gradient(120deg,#4a6cf7,#7b5cf0);color:#fff;
+    padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:20;box-shadow:0 2px 10px rgba(60,70,150,.25);
+  }
+  header h1{font-size:19px;font-weight:600;letter-spacing:1px}
+  header .sub{font-size:12px;opacity:.85}
+  header .spacer{flex:1}
+  .btn{
+    border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;
+    background:#fff;color:var(--brand);font-weight:600;transition:.15s;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.18)}
+  .btn.ghost{background:rgba(255,255,255,.18);color:#fff}
+  main{display:flex;gap:16px;padding:16px 24px;align-items:flex-start;max-width:1500px;margin:0 auto}
+
+  /* 左侧宠物/药品面板 */
+  #petsPanel{width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+  .pet-card{background:var(--card);border-radius:12px;padding:12px 14px;box-shadow:0 1px 4px rgba(30,40,80,.07)}
+  .pet-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .pet-head .emoji{font-size:22px}
+  .pet-head .name{font-weight:700;font-size:15px}
+  .pet-head .meta{font-size:12px;color:var(--muted)}
+  .pet-head .ward{margin-left:auto;font-size:11px;background:#eef1fb;color:var(--brand);border-radius:6px;padding:2px 8px}
+  .med{border-top:1px dashed var(--line);padding:8px 0 4px}
+  .med:first-of-type{border-top:none}
+  .med-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .med-name{font-weight:600}
+  .dose{font-size:12px;color:var(--muted)}
+  .badge{font-size:11px;border-radius:5px;padding:1px 7px;color:#fff;font-weight:600}
+  .badge.emergency{background:var(--emergency)}
+  .badge.high{background:var(--high)}
+  .badge.normal{background:var(--normal)}
+  .med-info{font-size:12px;color:var(--muted);margin:4px 0 6px;display:flex;gap:12px;flex-wrap:wrap}
+  .med-info b{color:var(--ink);font-weight:600}
+  .med-btn{
+    border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:7px;
+    padding:4px 12px;font-size:12px;cursor:pointer;font-weight:600;
+  }
+  .med-btn:hover{background:var(--brand);color:#fff}
+  .med-btn:disabled{border-color:var(--line);color:var(--muted);cursor:not-allowed;background:#fafbfe}
+
+  /* 右侧排班区 */
+  #gridPanel{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+  #stats{display:flex;gap:10px;flex-wrap:wrap}
+  .stat{background:var(--card);border-radius:10px;padding:8px 16px;font-size:13px;box-shadow:0 1px 4px rgba(30,40,80,.07)}
+  .stat b{font-size:17px;margin-right:4px}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+
+  #gridWrap{background:var(--card);border-radius:12px;box-shadow:0 1px 4px rgba(30,40,80,.07);overflow:auto;max-height:calc(100vh - 240px)}
+  table{border-collapse:collapse;width:100%;min-width:560px}
+  thead th{
+    position:sticky;top:0;background:#f0f3fa;z-index:5;font-size:13px;padding:8px;
+    border-bottom:2px solid var(--line);color:var(--ink);
+  }
+  thead th:first-child{width:64px}
+  tbody td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:3px 4px;height:46px;vertical-align:middle}
+  tbody td.time{font-size:11px;color:var(--muted);text-align:center;white-space:nowrap;background:#fafbfe}
+  tbody tr.hour td.time{font-weight:700;color:var(--ink);font-size:12px}
+  tbody tr.hour td{border-top:2px solid #d8deeb}
+  td.emptycell{color:#dde3ee;text-align:center;font-size:11px}
+
+  .chip{border-radius:8px;padding:3px 6px;font-size:12px;color:#fff;height:100%;display:flex;flex-direction:column;justify-content:center;gap:1px}
+  .chip.emergency{background:var(--emergency)}
+  .chip.high{background:var(--high)}
+  .chip.normal{background:var(--normal)}
+  .chip.locked{outline:3px solid rgba(40,40,40,.45);outline-offset:-3px}
+  .chip-line1{display:flex;align-items:center;justify-content:space-between;gap:4px}
+  .chip-pet{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip-med{font-size:11px;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip-btns{display:flex;gap:2px;flex-shrink:0}
+  .chip-btns button{
+    border:none;background:rgba(255,255,255,.25);color:#fff;border-radius:4px;
+    width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0;
+  }
+  .chip-btns button:hover{background:rgba(255,255,255,.5)}
+
+  /* 待排区 */
+  #pendingPanel{background:var(--card);border-radius:12px;padding:12px 16px;box-shadow:0 1px 4px rgba(30,40,80,.07)}
+  #pendingPanel h2{font-size:14px;margin-bottom:8px}
+  .pending-item{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid #f3c1c1;background:#fff7f7;border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:13px;
+  }
+  .pending-item .reason{color:var(--emergency);font-size:12px;flex:1;min-width:200px}
+  .pending-empty{color:var(--muted);font-size:13px}
+  .small-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
+  .small-btn:hover{border-color:var(--brand);color:var(--brand)}
+
+  footer{max-width:1500px;margin:0 auto;padding:0 24px 24px;color:var(--muted);font-size:12px;line-height:1.8}
+  @media (max-width:1000px){ main{flex-direction:column} #petsPanel{width:100%} }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🐾 宠物住院喂药排班台</h1>
+    <div class="sub">排班时段 08:00 – 20:00 · 10 分钟/槽 · 数据仅保存在本浏览器</div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="btnAuto">⚡ 一键自动排班</button>
+  <button class="btn ghost" id="btnReset">↺ 重置数据</button>
+</header>
+
+<main>
+  <aside id="petsPanel"></aside>
+  <section id="gridPanel">
+    <div id="stats"></div>
+    <div class="legend" id="legend"></div>
+    <div id="gridWrap"></div>
+    <div id="pendingPanel"></div>
+  </section>
+</main>
+
+<footer>
+  规则说明：① 每项药有最小给药间隔，两次给药（含「上次给药时间」）不得早于该间隔；
+  ② 每位护理员同一 10 分钟槽最多一项任务；
+  ③ 高优先级 / 急救药物可插到普通任务前面，被挤掉的普通任务会自动重排到仍满足间隔的槽位，排不下则进入「待排」并注明冲突原因；
+  ④ 急救任务可点击 🔒 锁定，锁定后任何任务都不能挤占它的槽位；
+  ⑤ 点 ✓ 确认给药后，该药「上次给药时间」更新，下一次排班自动从满足间隔的时刻起算。
+</footer>
+
+<script>
+'use strict';
+/* ================= 常量与预置数据 ================= */
+const DAY_START = 8 * 60;          // 08:00
+const DAY_END   = 20 * 60;         // 20:00
+const SLOT_MIN  = 10;
+const SLOTS     = (DAY_END - DAY_START) / SLOT_MIN;   // 72 槽
+const STORE_KEY = 'petMedScheduler.v1';
+
+const CAREGIVERS = [
+  { id:'c1', name:'小周' },
+  { id:'c2', name:'小林' },
+  { id:'c3', name:'小陈' },
+];
+
+const PETS = [
+  { id:'p1', name:'旺财', species:'犬 · 金毛', emoji:'🐶', ward:'1号笼' },
+  { id:'p2', name:'咪咪', species:'猫 · 英短', emoji:'🐱', ward:'2号笼' },
+  { id:'p3', name:'豆豆', species:'犬 · 柯基', emoji:'🐶', ward:'3号笼' },
+  { id:'p4', name:'花花', species:'猫 · 布偶', emoji:'🐱', ward:'4号笼' },
+  { id:'p5', name:'团团', species:'兔 · 垂耳', emoji:'🐰', ward:'5号笼' },
+  { id:'p6', name:'皮皮', species:'鸟 · 玄凤', emoji:'🦜', ward:'6号笼' },
+];
+
+// lastGiven：上次给药时间（分钟，0=00:00）；minInterval：最小间隔（分钟）
+const MEDS = [
+  { id:'m1', petId:'p1', name:'胰岛素',       dose:'2U 皮下',      minInterval:360, priority:'high',      lastGiven:390 },
+  { id:'m2', petId:'p1', name:'阿莫西林',     dose:'250mg 口服',   minInterval:480, priority:'normal',    lastGiven:480 },
+  { id:'m3', petId:'p2', name:'美洛昔康',     dose:'0.1mg 口服',   minInterval:720, priority:'normal',    lastGiven:540 },
+  { id:'m4', petId:'p3', name:'头孢氨苄',     dose:'300mg 口服',   minInterval:360, priority:'high',      lastGiven:420 },
+  { id:'m5', petId:'p3', name:'益生菌',       dose:'1包 拌粮',     minInterval:240, priority:'normal',    lastGiven:510 },
+  { id:'m6', petId:'p4', name:'托百士眼药水', dose:'双眼各1滴',    minInterval:120, priority:'normal',    lastGiven:480 },
+  { id:'m7', petId:'p5', name:'拜有利',       dose:'10mg 口服',    minInterval:720, priority:'normal',    lastGiven:600 },
+  { id:'m8', petId:'p6', name:'强心急救针',   dose:'0.05ml 肌注',  minInterval:60,  priority:'emergency', lastGiven:660 },
+  { id:'m9', petId:'p6', name:'电解质补液',   dose:'5ml 口服',     minInterval:180, priority:'normal',    lastGiven:570 },
+];
+
+const PRIO = {
+  emergency: { label:'急救', rank:0 },
+  high:      { label:'高',   rank:1 },
+  normal:    { label:'普通', rank:2 },
+};
+
+/* ================= 状态（持久化到 localStorage） ================= */
+let state;
+function defaultState(){
+  return { seq:1, tasks:[], lastGiven:{}, givenLog:[] };
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const s = JSON.parse(raw); if(s && Array.isArray(s.tasks)) return s; }
+  }catch(e){ /* 数据损坏则重置 */ }
+  return defaultState();
+}
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function commit(){ save(); render(); }
+
+/* ================= 工具函数 ================= */
+const medById  = id => MEDS.find(m => m.id === id);
+const petById  = id => PETS.find(p => p.id === id);
+const cgById   = id => CAREGIVERS.find(c => c.id === id);
+const fmt      = mins => String(Math.floor(mins/60)).padStart(2,'0') + ':' + String(mins%60).padStart(2,'0');
+const slotTime = s => DAY_START + s * SLOT_MIN;
+const getLastGiven = med => (state.lastGiven[med.id] !== undefined ? state.lastGiven[med.id] : med.lastGiven);
+const fmtInterval = min => (min % 60 === 0 ? (min/60) + 'h' : min + 'min');
+
+/** 该药最早可给药的槽位（上次给药 + 最小间隔） */
+function dueSlot(med){
+  const earliest = getLastGiven(med) + med.minInterval;
+  return Math.max(0, Math.ceil((earliest - DAY_START) / SLOT_MIN));
+}
+
+/** 某药能否放在某槽：不早于上次给药+间隔，且与同药其他已排任务满足间隔 */
+function canPlace(medId, slot){
+  if(slot < 0 || slot >= SLOTS) return false;
+  const med = medById(medId);
+  const t = slotTime(slot);
+  if(t - getLastGiven(med) < med.minInterval) return false;
+  for(const x of state.tasks){
+    if(x.status !== 'scheduled' || x.medId !== medId) continue;
+    if(Math.abs(slotTime(x.slot) - t) < med.minInterval) return false;
+  }
+  return true;
+}
+
+/** 护理员某槽是否空闲 */
+function caregiverFree(cgId, slot){
+  return !state.tasks.some(t => t.status==='scheduled' && t.slot===slot && t.caregiverId===cgId);
+}
+
+/** 从 fromSlot 起找第一个「间隔合法 + 有护理员空闲」的槽 */
+function findSlot(medId, fromSlot){
+  for(let s = Math.max(fromSlot, dueSlot(medById(medId))); s < SLOTS; s++){
+    if(!canPlace(medId, s)) continue;
+    const cg = CAREGIVERS.find(c => caregiverFree(c.id, s));
+    if(cg) return { slot:s, caregiverId:cg.id };
+  }
+  return null;
+}
+
+function newTask(medId, caregiverId, slot){
+  return { id: state.seq++, medId, caregiverId, slot, status:'scheduled', locked:false, reason:'' };
+}
+function addPending(medId, reason){
+  state.tasks.push({ id: state.seq++, medId, caregiverId:null, slot:null, status:'pending', locked:false, reason });
+}
+
+/* ================= 核心排班逻辑 ================= */
+/**
+ * 为某药排入下一剂（含插队语义）：
+ * - 从最早可给药槽起向后扫描；
+ * - 槽内有空闲护理员 → 直接放入；
+ * - 槽满且本药优先级更高 → 挤掉未锁定的低优先级任务，并为其重找合法槽位，找不到则转待排；
+ * - 槽内是锁定任务或同级/更高优先级 → 跳过该槽；
+ * - 扫描完仍放不下 → 待排并写明原因。
+ */
+function insertTask(medId){
+  const med = medById(medId);
+  const start = dueSlot(med);
+  if(start >= SLOTS){
+    addPending(medId, `最早可给药时间 ${fmt(getLastGiven(med) + med.minInterval)} 已超出排班时段（20:00）`);
+    return false;
+  }
+  const myRank = PRIO[med.priority].rank;
+  for(let s = start; s < SLOTS; s++){
+    if(!canPlace(medId, s)) continue;
+    const freeCg = CAREGIVERS.find(c => caregiverFree(c.id, s));
+    if(freeCg){
+      state.tasks.push(newTask(medId, freeCg.id, s));
+      return true;
+    }
+    // 尝试插队：找一个未锁定且优先级更低的占用者
+    const victim = state.tasks.find(t =>
+      t.status==='scheduled' && t.slot===s && !t.locked &&
+      PRIO[medById(t.medId).priority].rank > myRank
+    );
+    if(victim){
+      const victimMed = medById(victim.medId);
+      state.tasks = state.tasks.filter(t => t.id !== victim.id);
+      state.tasks.push(newTask(medId, victim.caregiverId, s));
+      const spot = findSlot(victimMed.id, s);   // 同槽其他护理员或更晚的槽均可
+      if(spot){
+        state.tasks.push(newTask(victimMed.id, spot.caregiverId, spot.slot));
+      }else{
+        addPending(victimMed.id,
+          `被高优先级任务「${med.name}」插队挤占 ${fmt(slotTime(s))} 后，时段内已无满足最小间隔 ${fmtInterval(victimMed.minInterval)} 且护理员空闲的槽位`);
+      }
+      return true;
+    }
+    // 占用者已锁定或优先级不低于本药 → 继续找下一槽
+  }
+  addPending(medId,
+    `排班时段内无可用槽位：需满足最小间隔 ${fmtInterval(med.minInterval)}，且同槽护理员空闲（锁定的急救任务不可移动）`);
+  return false;
+}
+
+/** 一键自动排班：保留锁定任务，其余清空后按 优先级→最早可给药时间 依次排入 */
+function autoSchedule(){
+  state.tasks = state.tasks.filter(t => t.locked);
+  const meds = [...MEDS].sort((a,b) =>
+    PRIO[a.priority].rank - PRIO[b.priority].rank || dueSlot(a) - dueSlot(b));
+  meds.forEach(m => insertTask(m.id));
+}
+
+/* ================= 用户操作 ================= */
+function scheduleMed(medId){ insertTask(medId); commit(); }
+
+function retryTask(id){
+  const t = state.tasks.find(x => x.id === id);
+  if(!t) return;
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  insertTask(t.medId);
+  commit();
+}
+
+function removeTask(id){
+  const t = state.tasks.find(x => x.id === id);
+  if(!t || t.locked) return;
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  commit();
+}
+
+function toggleLock(id){
+  const t = state.tasks.find(x => x.id === id);
+  if(!t || medById(t.medId).priority !== 'emergency') return;
+  t.locked = !t.locked;
+  commit();
+}
+
+function markGiven(id){
+  const t = state.tasks.find(x => x.id === id);
+  if(!t || t.status !== 'scheduled') return;
+  const time = slotTime(t.slot);
+  state.lastGiven[t.medId] = time;
+  state.givenLog.push({ medId: t.medId, time });
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  commit();
+}
+
+function resetAll(){
+  if(!confirm('确定重置？将清空所有排班、给药记录并恢复初始数据。')) return;
+  localStorage.removeItem(STORE_KEY);
+  state = defaultState();
+  commit();
+}
+
+/* ================= 渲染 ================= */
+function render(){
+  renderPets();
+  renderStats();
+  renderLegend();
+  renderGrid();
+  renderPending();
+}
+
+function renderPets(){
+  const el = document.getElementById('petsPanel');
+  let html = '';
+  for(const pet of PETS){
+    const meds = MEDS.filter(m => m.petId === pet.id);
+    html += `<div class="pet-card">
+      <div class="pet-head">
+        <span class="emoji">${pet.emoji}</span>
+        <span class="name">${pet.name}</span>
+        <span class="meta">${pet.species}</span>
+        <span class="ward">${pet.ward}</span>
+      </div>`;
+    for(const m of meds){
+      const last = getLastGiven(m);
+      const due = last + m.minInterval;
+      const hasTask = state.tasks.some(t => t.medId === m.id);
+      const dueText = due <= DAY_START ? '现在可给药'
+        : due >= DAY_END ? '今日已无可排时段'
+        : '最早 ' + fmt(due);
+      html += `<div class="med">
+        <div class="med-top">
+          <span class="med-name">${m.name}</span>
+          <span class="dose">${m.dose}</span>
+          <span class="badge ${m.priority}">${PRIO[m.priority].label}</span>
+        </div>
+        <div class="med-info">
+          <span>间隔 <b>${fmtInterval(m.minInterval)}</b></span>
+          <span>上次给药 <b>${fmt(last)}</b></span>
+          <span><b>${dueText}</b></span>
+        </div>
+        <button class="med-btn" data-act="schedule" data-med="${m.id}" ${hasTask ? 'disabled' : ''}>
+          ${hasTask ? '已排班 / 待处理' : '排入下一剂'}
+        </button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderStats(){
+  const scheduled = state.tasks.filter(t => t.status==='scheduled').length;
+  const pending   = state.tasks.filter(t => t.status==='pending').length;
+  const locked    = state.tasks.filter(t => t.locked).length;
+  document.getElementById('stats').innerHTML =
+    `<div class="stat"><b>${scheduled}</b>已排任务</div>
+     <div class="stat"><b>${pending}</b>待排（冲突）</div>
+     <div class="stat"><b>${state.givenLog.length}</b>今日已给药</div>
+     <div class="stat"><b>${locked}</b>锁定急救</div>`;
+}
+
+function renderLegend(){
+  document.getElementById('legend').innerHTML =
+    `<span><span class="dot" style="background:var(--emergency)"></span>急救（可锁定 🔒）</span>
+     <span><span class="dot" style="background:var(--high)"></span>高优先级（可插普通任务前）</span>
+     <span><span class="dot" style="background:var(--normal)"></span>普通</span>
+     <span>操作：✓ 确认给药 · ✕ 移出排班 · 🔒 锁定/解锁</span>`;
+}
+
+function renderGrid(){
+  const map = {};
+  for(const t of state.tasks){
+    if(t.status === 'scheduled') map[t.slot + ':' + t.caregiverId] = t;
+  }
+  let html = `<table><thead><tr><th>时间</th>`;
+  for(const c of CAREGIVERS) html += `<th>${c.name}</th>`;
+  html += `</tr></thead><tbody>`;
+  for(let s = 0; s < SLOTS; s++){
+    const t = slotTime(s);
+    const hour = t % 60 === 0;
+    html += `<tr class="${hour ? 'hour' : ''}"><td class="time">${fmt(t)}</td>`;
+    for(const c of CAREGIVERS){
+      const task = map[s + ':' + c.id];
+      if(!task){ html += `<td class="emptycell">—</td>`; continue; }
+      const med = medById(task.medId);
+      const pet = petById(med.petId);
+      const isEmergency = med.priority === 'emergency';
+      html += `<td><div class="chip ${med.priority} ${task.locked ? 'locked' : ''}">
+        <div class="chip-line1">
+          <span class="chip-pet">${pet.emoji} ${pet.name}</span>
+          <span class="chip-btns">
+            <button data-act="given" data-id="${task.id}" title="确认给药">✓</button>
+            ${isEmergency ? `<button data-act="lock" data-id="${task.id}" title="${task.locked ? '解锁' : '锁定（不可被插队移动）'}">${task.locked ? '🔒' : '🔓'}</button>` : ''}
+            ${!task.locked ? `<button data-act="remove" data-id="${task.id}" title="移出排班">✕</button>` : ''}
+          </span>
+        </div>
+        <div class="chip-med">${med.name} · ${med.dose}</div>
+      </div></td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById('gridWrap').innerHTML = html;
+}
+
+function renderPending(){
+  const list = state.tasks.filter(t => t.status === 'pending');
+  const el = document.getElementById('pendingPanel');
+  let html = `<h2>⏳ 待排任务（${list.length}）</h2>`;
+  if(!list.length){
+    html += `<div class="pending-empty">暂无待排任务 🎉</div>`;
+  }else{
+    for(const t of list){
+      const med = medById(t.medId);
+      const pet = petById(med.petId);
+      html += `<div class="pending-item">
+        <span class="badge ${med.priority}">${PRIO[med.priority].label}</span>
+        <b>${pet.emoji} ${pet.name} · ${med.name}</b>
+        <span class="reason">⚠ ${t.reason}</span>
+        <button class="small-btn" data-act="retry" data-id="${t.id}">重试排班</button>
+        <button class="small-btn" data-act="remove" data-id="${t.id}">移除</button>
+      </div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+/* ================= 事件与初始化 ================= */
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if(!btn) return;
+  const act = btn.dataset.act;
+  if(act === 'schedule') scheduleMed(btn.dataset.med);
+  else if(act === 'retry')  retryTask(+btn.dataset.id);
+  else if(act === 'remove') removeTask(+btn.dataset.id);
+  else if(act === 'lock')   toggleLock(+btn.dataset.id);
+  else if(act === 'given')  markGiven(+btn.dataset.id);
+});
+document.getElementById('btnAuto').addEventListener('click', () => { autoSchedule(); commit(); });
+document.getElementById('btnReset').addEventListener('click', resetAll);
+
+state = loadState();
+render();
+</script>
+</body>
+</html>
