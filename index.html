@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宠物住院喂药排班台</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🐾</span>
+    <div>
+      <h1>宠物住院喂药排班台</h1>
+      <p class="subtitle">十分钟一槽 · 最小间隔校验 · 高优先级插队 · 数据存于浏览器本地</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span id="clock" class="clock"></span>
+    <button id="btn-reschedule" class="btn">🔄 立即重排</button>
+    <button id="btn-reset" class="btn btn-ghost" title="清空本地数据并恢复预置数据">↺ 恢复预置</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 左列：住院宠物与药物 -->
+  <section class="col-left">
+    <div class="panel">
+      <h2>住院宠物 · 用药档案</h2>
+      <div id="pets-list" class="pets-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>添加给药任务</h2>
+      <form id="task-form" class="task-form">
+        <label>药物
+          <select id="f-medication" required></select>
+        </label>
+        <p id="f-med-hint" class="form-hint"></p>
+        <label>护理员
+          <select id="f-nurse"></select>
+        </label>
+        <label>紧急度
+          <select id="f-priority">
+            <option value="normal">普通</option>
+            <option value="high">高优先级（可插队）</option>
+            <option value="emergency">急救（锁定，不可被移动）</option>
+          </select>
+        </label>
+        <p id="f-priority-hint" class="form-hint"></p>
+        <button type="submit" class="btn btn-primary btn-block">加入排班池</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 右列：排班甘特图 -->
+  <section class="col-right">
+    <div class="panel panel-gantt">
+      <div class="gantt-head">
+        <h2>今日排班（10 分钟 / 槽）</h2>
+        <div id="stats" class="stats"></div>
+      </div>
+      <div id="gantt-scroll" class="gantt-scroll">
+        <div id="gantt" class="gantt">
+          <div class="gantt-corner"></div>
+          <div id="gantt-ruler" class="gantt-ruler"></div>
+          <div id="gantt-rows"></div>
+        </div>
+      </div>
+      <p class="legend">
+        <span class="dot dot-normal"></span>普通
+        <span class="dot dot-high"></span>高优先级
+        <span class="dot dot-emergency"></span>急救（锁定）
+        <span class="dot dot-past"></span>已过期
+        <span class="now-line">▎</span>当前时间
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>待排任务（冲突 / 无法落槽）</h2>
+      <div id="pending-list"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
